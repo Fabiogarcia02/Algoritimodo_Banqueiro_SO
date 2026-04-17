@@ -21,9 +21,9 @@ Recomenda-se instalar:
 
 ---
 
-## 🚀 Como executar
+## Como executei
 
-### 🔹 Opção 1 — Usando VS Code (mais fácil)
+### 🔹 Opção 1 — Usando VS Code
 
 1. Instale a extensão **C/C++ Runner**
 2. Abra o arquivo `banker.c`
