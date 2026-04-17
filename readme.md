@@ -20,11 +20,17 @@ Execute no terminal do Ubuntu:
 
 sudo apt update
 sudo apt install build-essential -y
-🚀 Como executar o projeto (WSL / Ubuntu)
+
+ Como executar o projeto (WSL / Ubuntu)
+ 
 📍 1. Abrir o WSL e entrar na pasta do projeto
+
 cd /mnt/c/Users/Fábio/Desktop/trabalhoSO/Algoritimodo_Banqueiro_SO
+
 📍 2. Compilar o código
+
 gcc banker.c -o banker -pthread
+
 📍 3. Executar o programa
 
 O programa precisa de 3 valores iniciais de recursos:
