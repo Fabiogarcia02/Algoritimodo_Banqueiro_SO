@@ -3,154 +3,207 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <time.h>
 
-#define NUMBER_OF_CUSTOMERS 5
-#define NUMBER_OF_RESOURCES 3
+#define NUM_CLIENTES 5
+#define NUM_RECURSOS 3
 
-int available[NUMBER_OF_RESOURCES];
-int maximum[NUMBER_OF_CUSTOMERS][NUMBER_OF_RESOURCES];
-int allocation[NUMBER_OF_CUSTOMERS][NUMBER_OF_RESOURCES];
-int need[NUMBER_OF_CUSTOMERS][NUMBER_OF_RESOURCES];
+int disponivel[NUM_RECURSOS];
+int maximo[NUM_CLIENTES][NUM_RECURSOS];
+int alocacao[NUM_CLIENTES][NUM_RECURSOS];
+int necessidade[NUM_CLIENTES][NUM_RECURSOS];
 
 pthread_mutex_t mutex;
 
-/*  Verifica estado seguro */
-int safety_check() {
-    int work[NUMBER_OF_RESOURCES];
-    bool finish[NUMBER_OF_CUSTOMERS] = {false};
 
-    for (int i = 0; i < NUMBER_OF_RESOURCES; i++)
-        work[i] = available[i];
+void mostrar_estado() {
+    printf("\n========== ESTADO DO SISTEMA ==========\n");
+
+    printf("Disponivel: ");
+    for (int i = 0; i < NUM_RECURSOS; i++)
+        printf("%d ", disponivel[i]);
+    printf("\n\n");
+
+    printf("Alocacao:\n");
+    for (int i = 0; i < NUM_CLIENTES; i++) {
+        printf("Cliente %d: ", i);
+        for (int j = 0; j < NUM_RECURSOS; j++)
+            printf("%d ", alocacao[i][j]);
+        printf("\n");
+    }
+
+    printf("\nNecessidade:\n");
+    for (int i = 0; i < NUM_CLIENTES; i++) {
+        printf("Cliente %d: ", i);
+        for (int j = 0; j < NUM_RECURSOS; j++)
+            printf("%d ", necessidade[i][j]);
+        printf("\n");
+    }
+
+    printf("=======================================\n");
+}
+
+
+int verificar_seguranca() {
+    int trabalho[NUM_RECURSOS];
+    bool finalizado[NUM_CLIENTES] = {false};
+
+    for (int i = 0; i < NUM_RECURSOS; i++)
+        trabalho[i] = disponivel[i];
+
+    printf("\n[VERIFICANDO SEGURANÇA]\n");
 
     int count = 0;
 
-    while (count < NUMBER_OF_CUSTOMERS) {
-        bool found = false;
+    while (count < NUM_CLIENTES) {
+        bool encontrou = false;
 
-        for (int i = 0; i < NUMBER_OF_CUSTOMERS; i++) {
-            if (!finish[i]) {
-                bool possible = true;
+        for (int i = 0; i < NUM_CLIENTES; i++) {
+            if (!finalizado[i]) {
+                bool pode_executar = true;
 
-                for (int j = 0; j < NUMBER_OF_RESOURCES; j++) {
-                    if (need[i][j] > work[j]) {
-                        possible = false;
+                for (int j = 0; j < NUM_RECURSOS; j++) {
+                    if (necessidade[i][j] > trabalho[j]) {
+                        pode_executar = false;
                         break;
                     }
                 }
 
-                if (possible) {
-                    for (int j = 0; j < NUMBER_OF_RESOURCES; j++)
-                        work[j] += allocation[i][j];
+                if (pode_executar) {
+                    printf(" Cliente %d pode finalizar\n", i);
 
-                    finish[i] = true;
-                    found = true;
+                    for (int j = 0; j < NUM_RECURSOS; j++)
+                        trabalho[j] += alocacao[i][j];
+
+                    finalizado[i] = true;
+                    encontrou = true;
                     count++;
                 }
             }
         }
 
-        if (!found)
-            return 0; // inseguro
+        if (!encontrou) {
+            printf(" Sistema em estado INSEGURO\n");
+            return 0;
+        }
     }
 
-    return 1; // seguro
+    printf(" Sistema em estado SEGURO\n");
+    return 1;
 }
 
-/* 📥 Solicita recursos */
-int request_resources(int customer_num, int request[]) {
+
+
+int solicitar_recursos(int cliente, int pedido[]) {
 
     pthread_mutex_lock(&mutex);
 
-    // verifica se request <= need
-    for (int i = 0; i < NUMBER_OF_RESOURCES; i++) {
-        if (request[i] > need[customer_num][i]) {
+    printf("\n Cliente %d solicitando: ", cliente);
+    for (int i = 0; i < NUM_RECURSOS; i++)
+        printf("%d ", pedido[i]);
+    printf("\n");
+
+    // Verifica se excede a necessidade
+    for (int i = 0; i < NUM_RECURSOS; i++) {
+        if (pedido[i] > necessidade[cliente][i]) {
+            printf(" NEGADO (excede necessidade)\n");
             pthread_mutex_unlock(&mutex);
             return -1;
         }
     }
 
-    // verifica se há recursos disponíveis
-    for (int i = 0; i < NUMBER_OF_RESOURCES; i++) {
-        if (request[i] > available[i]) {
+    // Verifica se há recursos disponíveis
+    for (int i = 0; i < NUM_RECURSOS; i++) {
+        if (pedido[i] > disponivel[i]) {
+            printf(" NEGADO (recursos insuficientes)\n");
             pthread_mutex_unlock(&mutex);
             return -1;
         }
     }
 
-    // alocação temporária
-    for (int i = 0; i < NUMBER_OF_RESOURCES; i++) {
-        available[i] -= request[i];
-        allocation[customer_num][i] += request[i];
-        need[customer_num][i] -= request[i];
+    // Alocação temporária
+    for (int i = 0; i < NUM_RECURSOS; i++) {
+        disponivel[i] -= pedido[i];
+        alocacao[cliente][i] += pedido[i];
+        necessidade[cliente][i] -= pedido[i];
     }
 
-    // verifica segurança
-    if (safety_check()) {
+    // Verifica segurança
+    if (verificar_seguranca()) {
+        printf(" Pedido APROVADO\n");
+        mostrar_estado();
         pthread_mutex_unlock(&mutex);
         return 0;
     }
 
-    // rollback (estado inseguro)
-    for (int i = 0; i < NUMBER_OF_RESOURCES; i++) {
-        available[i] += request[i];
-        allocation[customer_num][i] -= request[i];
-        need[customer_num][i] += request[i];
+   
+    printf("desfaz uma alocação\n");// quando a verificação de segurança
+    //  indica que o sistema entraria em um estado inseguro
+
+    for (int i = 0; i < NUM_RECURSOS; i++) {
+        disponivel[i] += pedido[i];
+        alocacao[cliente][i] -= pedido[i];
+        necessidade[cliente][i] += pedido[i];
     }
+
+    mostrar_estado();
 
     pthread_mutex_unlock(&mutex);
     return -1;
 }
 
-/* Libera recursos */
-int release_resources(int customer_num, int release[]) {
+
+int liberar_recursos(int cliente, int liberar[]) {
 
     pthread_mutex_lock(&mutex);
 
-    for (int i = 0; i < NUMBER_OF_RESOURCES; i++) {
+    printf("\n Cliente %d liberando: ", cliente);
+    for (int i = 0; i < NUM_RECURSOS; i++)
+        printf("%d ", liberar[i]);
+    printf("\n");
 
-        if (release[i] > allocation[customer_num][i]) {
+    for (int i = 0; i < NUM_RECURSOS; i++) {
+
+        if (liberar[i] > alocacao[cliente][i]) {
+            printf(" ERRO: liberando mais do que possui\n");
             pthread_mutex_unlock(&mutex);
             return -1;
         }
 
-        available[i] += release[i];
-        allocation[customer_num][i] -= release[i];
-        need[customer_num][i] += release[i];
+        disponivel[i] += liberar[i];
+        alocacao[cliente][i] -= liberar[i];
+        necessidade[cliente][i] += liberar[i];
     }
+
+    mostrar_estado();
 
     pthread_mutex_unlock(&mutex);
     return 0;
 }
 
-/*  Thread do cliente */
-void *customer_thread(void *id_ptr) {
-    int id = *(int *)id_ptr;
 
-   for (int k = 0; k < 3; k++) {
+void *thread_cliente(void *arg) {
+    int id = *(int *)arg;
 
-        int request[NUMBER_OF_RESOURCES];
+    while (1) {
 
-        for (int i = 0; i < NUMBER_OF_RESOURCES; i++) {
-            request[i] = rand() % (need[id][i] + 1);
+        int pedido[NUM_RECURSOS];
+
+        for (int i = 0; i < NUM_RECURSOS; i++) {
+            pedido[i] = rand() % (necessidade[id][i] + 1);
         }
 
-        if (request_resources(id, request) == 0) {
-            printf("Cliente %d: pedido APROVADO\n", id);
-        } else {
-            printf("Cliente %d: pedido NEGADO\n", id);
-        }
+        solicitar_recursos(id, pedido);
 
         sleep(1);
 
-        int release[NUMBER_OF_RESOURCES];
+        int liberar[NUM_RECURSOS];
 
-        for (int i = 0; i < NUMBER_OF_RESOURCES; i++) {
-            release[i] = rand() % (allocation[id][i] + 1);
+        for (int i = 0; i < NUM_RECURSOS; i++) {
+            liberar[i] = rand() % (alocacao[id][i] + 1);
         }
 
-        if (release_resources(id, release) == 0) {
-            printf("Cliente %d: liberou recursos\n", id);
-        }
+        liberar_recursos(id, liberar);
 
         sleep(1);
     }
@@ -158,41 +211,45 @@ void *customer_thread(void *id_ptr) {
     return NULL;
 }
 
-/*  MAIN */
+
 int main(int argc, char *argv[]) {
 
-    if (argc != NUMBER_OF_RESOURCES + 1) {
+    if (argc != NUM_RECURSOS + 1) {
         printf("Uso: ./a.out <r1> <r2> <r3>\n");
         return 1;
     }
 
-    pthread_t threads[NUMBER_OF_CUSTOMERS];
-    int ids[NUMBER_OF_CUSTOMERS];
+    srand(time(NULL));
+
+    pthread_t threads[NUM_CLIENTES];
+    int ids[NUM_CLIENTES];
 
     pthread_mutex_init(&mutex, NULL);
 
-    // inicializa available via argv
-    for (int i = 0; i < NUMBER_OF_RESOURCES; i++) {
-        available[i] = atoi(argv[i + 1]);
+    // Inicializa recursos disponíveis
+    for (int i = 0; i < NUM_RECURSOS; i++) {
+        disponivel[i] = atoi(argv[i + 1]);
     }
 
-    // inicializa estruturas
-    for (int i = 0; i < NUMBER_OF_CUSTOMERS; i++) {
-        for (int j = 0; j < NUMBER_OF_RESOURCES; j++) {
-            maximum[i][j] = rand() % (available[j] + 1);
-            allocation[i][j] = 0;
-            need[i][j] = maximum[i][j];
+    // Inicializa estruturas
+    for (int i = 0; i < NUM_CLIENTES; i++) {
+        for (int j = 0; j < NUM_RECURSOS; j++) {
+            maximo[i][j] = rand() % (disponivel[j] + 1);
+            alocacao[i][j] = 0;
+            necessidade[i][j] = maximo[i][j];
         }
     }
 
-    // cria threads
-    for (int i = 0; i < NUMBER_OF_CUSTOMERS; i++) {
+    mostrar_estado();
+
+    // Cria threads
+    for (int i = 0; i < NUM_CLIENTES; i++) {
         ids[i] = i;
-        pthread_create(&threads[i], NULL, customer_thread, &ids[i]);
+        pthread_create(&threads[i], NULL, thread_cliente, &ids[i]);
     }
 
-    // mantém programa vivo
-    for (int i = 0; i < NUMBER_OF_CUSTOMERS; i++) {
+    // Aguarda threads
+    for (int i = 0; i < NUM_CLIENTES; i++) {
         pthread_join(threads[i], NULL);
     }
 
