@@ -25,8 +25,6 @@ sudo apt install build-essential -y
  
 📍 1. Abrir o WSL e entrar na pasta do projeto
 
-cd /mnt/c/Users/Fábio/Desktop/trabalhoSO/Algoritimodo_Banqueiro_SO
-
 📍 2. Compilar o código
 
 gcc banker.c -o banker -pthread
