@@ -27,7 +27,7 @@ sudo apt install build-essential -y
 
 📍 2. Compilar o código
 
-gcc banker.c -o banker -pthread
+gcc banker.c -o banker -lpthread
 
 📍 3. Executar o programa
 
